@@ -6,6 +6,7 @@ const Course = preload("res://scripts/course.gd")
 const Ball = preload("res://scripts/ball.gd")
 const Player = preload("res://scripts/player.gd")
 const Clubs = preload("res://scripts/clubs.gd")
+const Animals = preload("res://scripts/animals.gd")
 
 const SEARCH_LIMIT := 120.0
 const FIND_RADIUS := 3.0
@@ -46,6 +47,12 @@ func _ready() -> void:
 	player.course = course
 	player.ball = ball
 	add_child(player)
+	var animals := Animals.new()
+	animals.name = "Animals"
+	animals.course = course
+	animals.player = player
+	animals.ball = ball
+	add_child(animals)
 	_build_hud()
 
 	ball.stopped.connect(_on_ball_stopped)
@@ -55,7 +62,7 @@ func _ready() -> void:
 	player.club_changed.connect(_refresh_club_label)
 	_start_hole()
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-	say("First tee is straight ahead.  H for controls", 6.0)
+	say("Follow the path to the first tee.  H for controls", 6.0)
 
 
 func _start_hole() -> void:
@@ -67,8 +74,10 @@ func _start_hole() -> void:
 	_last_shot = course.tee
 	player.step_away()
 	player.set_club(0)
-	player.global_position = course.ground_point(course.clubhouse + Vector2(0, -8)) + Vector3(0, 0.1, 0)
-	player.yaw = 0.3
+	# Start inside the clubhouse, facing the door.
+	player.global_position = Vector3(course.clubhouse.x + 1.0, course.clubhouse_floor + 0.25, course.clubhouse.y + 1.5)
+	player.velocity = Vector3.ZERO
+	player.yaw = 0.0
 	player.pitch = 0.0
 
 

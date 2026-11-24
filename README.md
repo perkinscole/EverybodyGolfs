@@ -39,9 +39,25 @@ holding past the top of the swing sprays it.
   Run out and it is a lost ball: one stroke penalty, drop on the fairway.
 - Water or out of bounds: one stroke penalty, replay from the same spot.
 
+## The hole
+
+One hand-laid par 4 (339 m) on a one-metre grid, with pixel textures generated
+in code. You start inside the clubhouse and follow the gravel cart path to the
+tee. A river crosses the fairway about halfway, with a pond on the left and a
+plank bridge carrying the path over it. Woods, meadows, flowers and long grass
+fill the rough. Sheep, cows and chickens wander about, run from you, and will
+deflect a ball that hits them; ducks circle the pond.
+
+The terrain itself is smooth rather than stepped blocks, so the ball rolls and
+putts break properly.
+
 ## Layout
 
-- `scripts/course.gd` — procedural hole: terrain, surfaces, trees, clubhouse
+- `scripts/course.gd` — terrain, surfaces, river, and the queries the ball uses
+- `scripts/scenery.gd` — trees, plants, rocks, bridge, flag, signs, cart, clouds
+- `scripts/clubhouse.gd` — the clubhouse building and interior
+- `scripts/animals.gd` — wildlife
+- `scripts/blocks.gd` — pixel textures, materials and box helpers
 - `scripts/ball.gd` — ball flight, bounce and roll
 - `scripts/clubs.gd` — club table and launch maths
 - `scripts/player.gd` — golfer, cameras, swing input

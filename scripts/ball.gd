@@ -13,10 +13,10 @@ const G := 9.81
 const DRAG := 0.0047
 const LIFT := 0.0026
 const SUBSTEPS := 4
-# Indexed by Course.Surface: ROUGH, FAIRWAY, GREEN, BUNKER, TEE, WATER
-const ROLL_DECEL := [7.0, 3.0, 0.85, 12.0, 3.0, 20.0]
-const BOUNCE := [0.20, 0.32, 0.28, 0.05, 0.32, 0.0]
-const SKID := [0.40, 0.55, 0.50, 0.15, 0.55, 0.0]
+# Indexed by Course.Surface: ROUGH, FAIRWAY, GREEN, BUNKER, TEE, WATER, PATH
+const ROLL_DECEL := [7.0, 3.0, 0.85, 12.0, 3.0, 20.0, 2.6]
+const BOUNCE := [0.20, 0.32, 0.28, 0.05, 0.32, 0.0, 0.5]
+const SKID := [0.40, 0.55, 0.50, 0.15, 0.55, 0.0, 0.8]
 
 var course: Course
 var velocity := Vector3.ZERO
@@ -30,6 +30,7 @@ var move_time := 0.0
 var first_landing := Vector3.INF
 
 var _last_tree := -1
+var _on_deck := false
 var _mesh: MeshInstance3D
 var _beacon: MeshInstance3D
 
@@ -139,16 +140,16 @@ func _step(dt: float) -> void:
 		if not course.in_bounds(p.x, p.z, 1.0):
 			_stop_in_hazard(p, "out of bounds")
 			return
-		var ground := course.height_at(p.x, p.z) + RADIUS
+		var ground := _ground(p)
 		if p.y <= ground:
 			p.y = ground
-			var s := course.surface_at(p.x, p.z)
+			var s := _surface(p)
 			if first_landing == Vector3.INF:
 				first_landing = p
 			if s == Course.Surface.WATER:
 				_stop_in_hazard(p, "water")
 				return
-			var n := course.normal_at(p.x, p.z)
+			var n := _normal(p)
 			var vn := velocity.dot(n)
 			if vn < 0.0:
 				var bounce_v: float = -vn * BOUNCE[s]
@@ -160,11 +161,12 @@ func _step(dt: float) -> void:
 		return
 
 	# Rolling.
-	var s := course.surface_at(p.x, p.z)
+	p.y = _ground(p)
+	var s := _surface(p)
 	if s == Course.Surface.WATER:
 		_stop_in_hazard(p, "water")
 		return
-	var n := course.normal_at(p.x, p.z)
+	var n := _normal(p)
 	var slope := Vector3(0, -G, 0)
 	slope -= n * slope.dot(n)
 	velocity -= n * velocity.dot(n)
@@ -181,13 +183,30 @@ func _step(dt: float) -> void:
 	if not course.in_bounds(p.x, p.z, 1.0):
 		_stop_in_hazard(p, "out of bounds")
 		return
-	p.y = course.height_at(p.x, p.z) + RADIUS
+	p.y = _ground(p)
 	position = p
 	if Vector2(p.x - course.pin.x, p.z - course.pin.y).length() < Course.CUP_RADIUS and speed < 4.0:
 		velocity = Vector3.ZERO
 		moving = false
 		visible = false
 		holed.emit()
+
+
+## Height the ball rests at here: the terrain, or the bridge deck if the
+## ball is at or above it.
+func _ground(p: Vector3) -> float:
+	var terrain := course.height_at(p.x, p.z)
+	var deck := course.deck_at(p.x, p.z)
+	_on_deck = deck > terrain and p.y > deck - 0.4
+	return (deck if _on_deck else terrain) + RADIUS
+
+
+func _surface(p: Vector3) -> int:
+	return Course.Surface.PATH if _on_deck else course.surface_at(p.x, p.z)
+
+
+func _normal(p: Vector3) -> Vector3:
+	return Vector3.UP if _on_deck else course.normal_at(p.x, p.z)
 
 
 func _stop_in_hazard(p: Vector3, kind: String) -> void:

@@ -44,6 +44,8 @@ var _hit_sent := false
 var _swing_angle := 0.0
 var _power := 0.0
 var _walk_phase := 0.0
+## Where the ball was when we addressed it; the stance stays put after the hit.
+var _anchor := Vector3.ZERO
 
 var _body: Node3D
 var _leg_l: Node3D
@@ -89,6 +91,7 @@ func address(target: Vector2) -> void:
 	pitch = 0.0
 	backswing = 0.0
 	drift = 0.0
+	_anchor = ball.position
 	_holding = false
 	_down = false
 	_swing_angle = 0.0
@@ -221,8 +224,10 @@ func _update_walk(delta: float) -> void:
 func _update_address(delta: float) -> void:
 	var aim := Clubs.aim_dir(aim_yaw)
 	var facing := aim.cross(Vector3.UP)
-	var stand := ball.position - facing * STANCE
+	var stand := _anchor - facing * STANCE
 	stand.y = course.height_at(stand.x, stand.z)
+	if _anchor.y > course.deck_at(stand.x, stand.z) - 0.4:
+		stand.y = maxf(stand.y, course.deck_at(stand.x, stand.z))
 	global_position = stand
 	rotation.y = atan2(-facing.x, -facing.z)
 	velocity = Vector3.ZERO
@@ -263,10 +268,11 @@ func _update_camera() -> void:
 	if mode == Mode.ADDRESS:
 		var aim := Clubs.aim_dir(aim_yaw)
 		var right := aim.cross(Vector3.UP)
-		var pos := ball.position - aim * 3.4 + right * 0.45 + Vector3(0, 1.6, 0)
+		var pos := _anchor - aim * 3.4 + right * 0.45 + Vector3(0, 1.6, 0)
 		pos.y = maxf(pos.y, course.height_at(pos.x, pos.z) + 0.7)
+		pos.y = maxf(pos.y, course.deck_at(pos.x, pos.z) + 0.7)
 		camera.global_position = pos
-		camera.look_at(ball.position + aim * 12.0 + Vector3(0, 1.0 + pitch * 10.0, 0))
+		camera.look_at(_anchor + aim * 12.0 + Vector3(0, 1.0 + pitch * 10.0, 0))
 		return
 	var head := global_position + Vector3(0, 1.62, 0)
 	var basis := Basis.from_euler(Vector3(pitch, yaw, 0))

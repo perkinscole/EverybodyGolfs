@@ -23,29 +23,45 @@ func _initialize() -> void:
 	var ball = main.ball
 	var course = main.course
 
-	await _shot("01_clubhouse")
+	await _shot("01_inside_clubhouse")
 	_check(not main.can_address(), "cannot address from the clubhouse")
+	_check(absf(player.global_position.y - course.clubhouse_floor) < 0.4, "standing on the clubhouse floor")
+	await _look("02_clubhouse_outside", course.clubhouse + Vector2(-9, -22), 3.6, 0.05)
+	await _look("02b_path_and_cart", Vector2(13, 22), 3.9, -0.1)
+	await _look("02c_river_and_bridge", Vector2(30, -158), -0.5, -0.2)
+	await _look("02d_on_the_bridge", Vector2(38, -174), 0.0, -0.15)
+	_check(player.global_position.y > course.bridge_top - 0.2, "bridge deck holds the player")
+	await _look("02e_pond", Vector2(-22, -155), 0.9, -0.2)
+	var sheep: Node3D = main.get_node("Animals").animals[0]["node"]
+	var by_sheep := Vector2(sheep.position.x, sheep.position.z) + Vector2(1.0, 6.5)
+	await _look("02f_sheep", by_sheep, 0.15, -0.12)
+	var cow: Node3D = main.get_node("Animals").animals[7]["node"]
+	await _look("02g_cows", Vector2(cow.position.x, cow.position.z) + Vector2(-1.0, 7.0), -0.14, -0.1)
+	await _look("02h_green", course.pin + Vector2(-8, 26), -0.3, -0.12)
 
 	# Walk to the tee.
 	player.global_position = course.ground_point(course.tee + Vector2(-1.2, 1.5)) + Vector3(0, 0.1, 0)
 	player.yaw = 0.0
 	player.pitch = -0.15
 	await _frames(20)
-	await _shot("02_on_the_tee")
+	await _shot("03_on_the_tee")
 	_check(main.can_address(), "can address on the tee")
 
 	main.interact()
 	_check(player.mode == Player.Mode.ADDRESS, "addressing")
 	await _frames(10)
-	await _shot("03_address")
+	await _shot("04_address")
 	player.start_backswing()
 	await _frames(55)
-	await _shot("04_backswing")
+	await _shot("05_backswing")
 	await _frames(30)
 	player.release_swing()
 	await _frames(12)
-	await _shot("05_ball_away")
+	await _shot("06_ball_away")
 	_check(main.strokes == 1 and ball.moving, "tee shot is in the air")
+	var stance: Vector3 = player.global_position
+	await _frames(20)
+	_check(player.global_position.distance_to(stance) < 0.05, "golfer stays put after the hit")
 	await _until(func(): return not ball.moving, 1200)
 	_check(player.mode == Player.Mode.FREE, "player released after the swing")
 	_check(main.search_time >= 0.0, "search clock running")
@@ -113,6 +129,18 @@ func _frames(n: int) -> void:
 	for i in n:
 		await physics_frame
 	await process_frame
+
+
+## Stand somewhere and look around for a screenshot.
+func _look(name: String, at: Vector2, yaw: float, pitch: float) -> void:
+	var player: Player = main.player
+	var y: float = maxf(main.course.height_at(at.x, at.y), main.course.deck_at(at.x, at.y))
+	player.global_position = Vector3(at.x, y + 0.15, at.y)
+	player.velocity = Vector3.ZERO
+	player.yaw = yaw
+	player.pitch = pitch
+	await _frames(25)
+	await _shot(name)
 
 
 func _until(cond: Callable, max_frames: int) -> void:
