@@ -34,9 +34,36 @@ func _ready() -> void:
 		Blocks.solid_box(self, body, Vector3(T, H, D), planks, Vector3(side * (W * 0.5 - T * 0.5), H * 0.5, 0))
 		Blocks.solid_box(self, body, Vector3(seg, H, T), planks,
 			Vector3(side * (DOOR_W * 0.5 + seg * 0.5), H * 0.5, front_z))
-		# Windows, front and side.
-		Blocks.box(self, Vector3(2.4, 1.4, T + 0.1), glass, Vector3(side * 4.6, 2.1, front_z))
-		Blocks.box(self, Vector3(T + 0.1, 1.4, 2.6), glass, Vector3(side * (W * 0.5 - T * 0.5), 2.1, 0))
+		# Windows, front and side, with frames, glazing bars and flower boxes.
+		var front_at := Vector3(side * 4.6, 2.1, front_z)
+		var side_at := Vector3(side * (W * 0.5 - T * 0.5), 2.1, 0)
+		Blocks.box(self, Vector3(2.4, 1.4, T + 0.1), glass, front_at)
+		Blocks.box(self, Vector3(T + 0.1, 1.4, 2.6), glass, side_at)
+		for edge in [-1.0, 1.0]:
+			Blocks.box(self, Vector3(2.7, 0.14, T + 0.24), dark_wood, front_at + Vector3(0, edge * 0.77, 0))
+			Blocks.box(self, Vector3(0.14, 1.5, T + 0.24), dark_wood, front_at + Vector3(edge * 1.27, 0, 0))
+			Blocks.box(self, Vector3(T + 0.24, 0.14, 2.9), dark_wood, side_at + Vector3(0, edge * 0.77, 0))
+			Blocks.box(self, Vector3(T + 0.24, 1.5, 0.14), dark_wood, side_at + Vector3(0, 0, edge * 1.37))
+		Blocks.box(self, Vector3(0.08, 1.4, T + 0.16), dark_wood, front_at)
+		Blocks.box(self, Vector3(2.4, 0.08, T + 0.16), dark_wood, front_at)
+		Blocks.box(self, Vector3(T + 0.16, 1.4, 0.08), dark_wood, side_at)
+		Blocks.box(self, Vector3(T + 0.16, 0.08, 2.6), dark_wood, side_at)
+		Blocks.box(self, Vector3(2.5, 0.3, 0.4), dark_wood, front_at + Vector3(0, -1.05, -0.4))
+		var petals := [Color(0.92, 0.25, 0.30), Color(0.98, 0.85, 0.25), Color(0.95, 0.95, 0.98), Color(0.70, 0.40, 0.85)]
+		for k in 8:
+			Blocks.box(self, Vector3(0.16, 0.22, 0.16), Blocks.plain(Color(0.20, 0.50, 0.18)),
+				front_at + Vector3(-1.05 + k * 0.3, -0.82, -0.4))
+			Blocks.box(self, Vector3(0.14, 0.12, 0.14), Blocks.plain(petals[k % petals.size()]),
+				front_at + Vector3(-1.05 + k * 0.3, -0.66 + (k % 2) * 0.06, -0.4))
+		# Lantern by the door.
+		Blocks.box(self, Vector3(0.12, 0.3, 0.3), dark_wood, Vector3(side * 1.6, 2.5, front_z - 0.3))
+		var glow := StandardMaterial3D.new()
+		glow.albedo_color = Color(1.0, 0.85, 0.45)
+		glow.emission_enabled = true
+		glow.emission = Color(1.0, 0.75, 0.35)
+		Blocks.box(self, Vector3(0.22, 0.28, 0.22), glow, Vector3(side * 1.6, 2.25, front_z - 0.42))
+		# Door frame.
+		Blocks.box(self, Vector3(0.18, DOOR_H, T + 0.2), dark_wood, Vector3(side * (DOOR_W * 0.5 + 0.09), DOOR_H * 0.5, front_z))
 		# Corner posts.
 		for zs in [-1.0, 1.0]:
 			Blocks.box(self, Vector3(0.6, H, 0.6), dark_wood,
@@ -46,8 +73,11 @@ func _ready() -> void:
 	Blocks.box(self, Vector3(DOOR_W + 0.5, 0.25, T + 0.2), dark_wood, Vector3(0, DOOR_H + 0.12, front_z))
 
 	# Stepped roof and chimney.
-	for i in 6:
-		Blocks.box(self, Vector3(W + 1.6, 0.6, D + 2.0 - i * 2.2), roof, Vector3(0, H + 0.3 + i * 0.6, 0))
+	for i in 12:
+		Blocks.box(self, Vector3(W + 1.6, 0.3, D + 2.0 - i * 1.0), roof, Vector3(0, H + 0.15 + i * 0.3, 0))
+	Blocks.box(self, Vector3(W + 1.9, 0.2, 0.5), dark_wood, Vector3(0, H + 3.7, 0))       # ridge beam
+	Blocks.box(self, Vector3(W + 1.7, 0.22, D + 2.1), dark_wood, Vector3(0, H - 0.05, 0)) # eaves
+	Blocks.box(self, Vector3(1.5, 0.25, 1.5), stone, Vector3(5.0, H + 4.1, 1.6))          # chimney cap
 	Blocks.box(self, Vector3(1.2, 4.0, 1.2), stone, Vector3(5.0, H + 2.0, 1.6))
 
 	# Porch.
@@ -56,6 +86,14 @@ func _ready() -> void:
 	Blocks.box(self, Vector3(8.8, 0.25, 3.8), roof, Vector3(0, 3.2, porch_z))
 	for px in [-3.8, 3.8]:
 		Blocks.solid_box(self, body, Vector3(0.3, 3.2, 0.3), dark_wood, Vector3(px, 1.6, porch_z - 1.4))
+		# Porch rail either side of the steps.
+		var rail_x: float = px * 0.62
+		Blocks.solid_box(self, body, Vector3(2.9, 0.12, 0.12), dark_wood, Vector3(rail_x, 1.0, porch_z - 1.45))
+		for k in 6:
+			Blocks.box(self, Vector3(0.08, 0.9, 0.08), dark_wood, Vector3(rail_x - 1.25 + k * 0.5, 0.5, porch_z - 1.45))
+	for k in 16:
+		Blocks.box(self, Vector3(0.45, 0.02, 3.2), planks if k % 2 == 0 else dark_wood,
+			Vector3(-3.75 + k * 0.5, FLOOR_TOP, porch_z))
 
 	var sign := Label3D.new()
 	sign.text = "CLUBHOUSE"

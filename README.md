@@ -27,6 +27,8 @@ godot --path .
 | Right mouse | Cancel the backswing / step away |
 | V | Third-person camera |
 | Tab | Scorecard |
+| M | Music on/off |
+| F11 | Fullscreen |
 | H | Controls |
 | B | Dev aid: beacon on the ball |
 
@@ -41,8 +43,9 @@ holding past the top of the swing sprays it.
 
 ## The hole
 
-One hand-laid par 4 (339 m) on a one-metre grid, with pixel textures generated
-in code. You start inside the clubhouse and follow the gravel cart path to the
+One hand-laid par 4 (339 m). Heights sit on a one-metre grid, surface edges on
+a half-metre grid, and textures are generated in code at 32 pixels per metre.
+Trees, bushes and mushrooms are built from small voxels. You start inside the clubhouse and follow the gravel cart path to the
 tee. A river crosses the fairway about halfway, with a pond on the left and a
 plank bridge carrying the path over it. Woods, meadows, flowers and long grass
 fill the rough. Sheep, cows and chickens wander about, run from you, and will
@@ -57,7 +60,8 @@ putts break properly.
 - `scripts/scenery.gd` — trees, plants, rocks, bridge, flag, signs, cart, clouds
 - `scripts/clubhouse.gd` — the clubhouse building and interior
 - `scripts/animals.gd` — wildlife
-- `scripts/blocks.gd` — pixel textures, materials and box helpers
+- `scripts/blocks.gd` — pixel textures, materials, box helpers, voxel mesher
+- `scripts/sound.gd` — every sound and the music loop, synthesised at startup
 - `scripts/ball.gd` — ball flight, bounce and roll
 - `scripts/clubs.gd` — club table and launch maths
 - `scripts/player.gd` — golfer, cameras, swing input
@@ -73,5 +77,6 @@ godot --headless -s tests/sim.gd
 xvfb-run -a godot --path . -s tests/playthrough.gd -- /tmp/shots
 ```
 
-The first checks club distances and has a bot play the hole. The second drives
+The first checks club distances, has a bot play the hole and sanity-checks the
+generated audio. The second drives
 the real scene through a full hole and saves screenshots.

@@ -1,5 +1,6 @@
 extends Node3D
-## One hand-laid golf hole on a one-metre grid: terrain, surfaces, river.
+## One hand-laid golf hole: heights on a one-metre grid, surfaces (fairway,
+## sand, path...) on a half-metre grid so their edges are finer.
 ## The ball and player query the same height/surface data the mesh is built
 ## from. Trees, props and the clubhouse are added by scenery.gd/clubhouse.gd.
 
@@ -10,6 +11,7 @@ const Clubhouse = preload("res://scripts/clubhouse.gd")
 enum Surface { ROUGH, FAIRWAY, GREEN, BUNKER, TEE, WATER, PATH }
 
 const CELL := 1.0
+const SUB := 2          # surface cells per metre
 const X_MIN := -100.0
 const X_MAX := 120.0
 const Z_MIN := -420.0
@@ -57,6 +59,7 @@ var _nx := 0
 var _nz := 0
 var _h := PackedFloat32Array()
 var _surf := PackedByteArray()
+var _sw := 0
 var _noise := FastNoiseLite.new()
 var _forest := FastNoiseLite.new()
 var _rng := RandomNumberGenerator.new()
@@ -126,9 +129,9 @@ func normal_at(x: float, z: float) -> Vector3:
 
 
 func surface_at(x: float, z: float) -> int:
-	var i := clampi(int((x - X_MIN) / CELL), 0, _nx - 2)
-	var j := clampi(int((z - Z_MIN) / CELL), 0, _nz - 2)
-	return _surf[j * (_nx - 1) + i]
+	var i := clampi(int((x - X_MIN) * SUB), 0, _sw - 1)
+	var j := clampi(int((z - Z_MIN) * SUB), 0, (_nz - 1) * SUB - 1)
+	return _surf[j * _sw + i]
 
 
 ## Top of the bridge deck above this spot, or -INF where there is no bridge.
@@ -243,29 +246,39 @@ func _cell_surface(p: Vector2, centre_h: float) -> int:
 
 
 func _tile_materials() -> Array:
+	var none := Color.BLACK
 	return [
-		Blocks.mat("t_rough", Color(0.16, 0.36, 0.12), 0.04, "spots", Color(0.21, 0.44, 0.15), 1.0, false),
-		Blocks.mat("t_forest", Color(0.12, 0.27, 0.10), 0.04, "spots", Color(0.24, 0.22, 0.12), 1.0, false),
-		Blocks.mat("t_fairway_a", Color(0.33, 0.60, 0.22), 0.025, "noise", Color.BLACK, 1.0, false),
-		Blocks.mat("t_fairway_b", Color(0.38, 0.66, 0.25), 0.025, "noise", Color.BLACK, 1.0, false),
-		Blocks.mat("t_green", Color(0.46, 0.78, 0.33), 0.015, "noise", Color.BLACK, 1.0, false),
-		Blocks.mat("t_sand", Color(0.88, 0.80, 0.56), 0.04, "spots", Color(0.80, 0.71, 0.47), 1.0, false),
-		Blocks.mat("t_tee", Color(0.42, 0.72, 0.30), 0.02, "noise", Color.BLACK, 1.0, false),
-		Blocks.mat("t_bed", Color(0.36, 0.30, 0.20), 0.05, "spots", Color(0.45, 0.43, 0.40), 1.0, false),
-		Blocks.mat("t_gravel", Color(0.62, 0.59, 0.54), 0.07, "spots", Color(0.45, 0.43, 0.40), 1.0, false),
+		Blocks.mat("t_rough_a", Color(0.16, 0.36, 0.12), 0.035, "grass", Color(0.24, 0.47, 0.16), 1.0, false),
+		Blocks.mat("t_rough_b", Color(0.15, 0.34, 0.12), 0.035, "grass", Color(0.21, 0.43, 0.15), 1.0, false),
+		Blocks.mat("t_rough_c", Color(0.17, 0.37, 0.13), 0.035, "grass", Color(0.27, 0.49, 0.19), 1.0, false),
+		Blocks.mat("t_forest_a", Color(0.12, 0.27, 0.10), 0.035, "spots", Color(0.26, 0.22, 0.12), 1.0, false),
+		Blocks.mat("t_forest_b", Color(0.13, 0.28, 0.11), 0.035, "grass", Color(0.19, 0.36, 0.13), 1.0, false),
+		Blocks.mat("t_fairway_a", Color(0.33, 0.60, 0.22), 0.02, "grass", Color(0.36, 0.64, 0.24), 1.0, false),
+		Blocks.mat("t_fairway_b", Color(0.38, 0.66, 0.25), 0.02, "grass", Color(0.41, 0.70, 0.27), 1.0, false),
+		Blocks.mat("t_green_a", Color(0.45, 0.77, 0.32), 0.012, "noise", none, 1.0, false),
+		Blocks.mat("t_green_b", Color(0.48, 0.80, 0.34), 0.012, "noise", none, 1.0, false),
+		Blocks.mat("t_sand", Color(0.88, 0.80, 0.56), 0.03, "sand", none, 1.0, false),
+		Blocks.mat("t_tee", Color(0.42, 0.72, 0.30), 0.015, "noise", none, 1.0, false),
+		Blocks.mat("t_bed", Color(0.36, 0.30, 0.20), 0.04, "pebbles", Color(0.46, 0.44, 0.40), 1.0, false),
+		Blocks.mat("t_gravel", Color(0.60, 0.57, 0.52), 0.05, "pebbles", Color(0.66, 0.64, 0.60), 1.0, false),
 	]
 
 
-func _tile_for(surface: int, p: Vector2) -> int:
+## Which texture a surface cell gets; (i, j) are its half-metre cell indices.
+func _tile_for(surface: int, p: Vector2, i: int, j: int) -> int:
 	match surface:
 		Surface.FAIRWAY:
-			return 2 if posmod(int(floor((p.x + p.y) / 8.0)), 2) == 0 else 3
-		Surface.GREEN: return 4
-		Surface.BUNKER: return 5
-		Surface.TEE: return 6
-		Surface.WATER: return 7
-		Surface.PATH: return 8
-	return 1 if forest_at(p) > 0.12 else 0
+			return 5 if posmod(int(floor((p.x + p.y) / 8.0)), 2) == 0 else 6
+		Surface.GREEN:
+			return 7 if posmod(int(floor(p.x / 3.0)) + int(floor(p.y / 3.0)), 2) == 0 else 8
+		Surface.BUNKER: return 9
+		Surface.TEE: return 10
+		Surface.WATER: return 11
+		Surface.PATH: return 12
+	var pick := ((i >> 1) * 73856093 ^ (j >> 1) * 19349663) & 0xffff
+	if forest_at(p) > 0.12:
+		return 3 + pick % 2
+	return pick % 3
 
 
 func _build_terrain() -> void:
@@ -280,32 +293,66 @@ func _build_terrain() -> void:
 		uvs.append(PackedVector2Array())
 		indices.append(PackedInt32Array())
 	var water_slot := mats.size()
-	_surf.resize((_nx - 1) * (_nz - 1))
+	var cw := _nx - 1
+	var cd := _nz - 1
 
-	for j in _nz - 1:
-		for i in _nx - 1:
+	# Classify at one metre first...
+	var coarse := PackedByteArray()
+	coarse.resize(cw * cd)
+	for j in cd:
+		for i in cw:
+			var avg := (_h[j * _nx + i] + _h[j * _nx + i + 1]
+				+ _h[(j + 1) * _nx + i] + _h[(j + 1) * _nx + i + 1]) * 0.25
+			coarse[j * cw + i] = _cell_surface(
+				Vector2(X_MIN + (i + 0.5) * CELL, Z_MIN + (j + 0.5) * CELL), avg)
+
+	# ...then split only the cells that sit on a boundary into half metres.
+	_sw = cw * SUB
+	_surf.resize(_sw * cd * SUB)
+	var half := CELL / SUB
+	for j in cd:
+		for i in cw:
 			var x0 := X_MIN + i * CELL
 			var z0 := Z_MIN + j * CELL
+			var surface := coarse[j * cw + i]
+			var on_edge := (i > 0 and coarse[j * cw + i - 1] != surface) \
+				or (i < cw - 1 and coarse[j * cw + i + 1] != surface) \
+				or (j > 0 and coarse[(j - 1) * cw + i] != surface) \
+				or (j < cd - 1 and coarse[(j + 1) * cw + i] != surface)
 			var ha := _h[j * _nx + i]
 			var hb := _h[j * _nx + i + 1]
 			var hc := _h[(j + 1) * _nx + i]
 			var hd := _h[(j + 1) * _nx + i + 1]
-			var mid := Vector2(x0 + CELL * 0.5, z0 + CELL * 0.5)
-			var surface := _cell_surface(mid, (ha + hb + hc + hd) * 0.25)
-			_surf[j * (_nx - 1) + i] = surface
-			var t := _tile_for(surface, mid)
-			var a := Vector3(x0, ha, z0)
-			var b := Vector3(x0 + CELL, hb, z0)
-			var c := Vector3(x0, hc, z0 + CELL)
-			var d := Vector3(x0 + CELL, hd, z0 + CELL)
-			_quad(verts[t], normals[t], uvs[t], indices[t], a, b, c, d)
-			if minf(minf(ha, hb), minf(hc, hd)) < water_y and water_distance(mid) < 2.0:
+			if not on_edge:
+				for sj in SUB:
+					for si in SUB:
+						_surf[(j * SUB + sj) * _sw + i * SUB + si] = surface
+				var t := _tile_for(surface, Vector2(x0 + 0.5, z0 + 0.5), i * SUB, j * SUB)
+				_quad(verts[t], normals[t], uvs[t], indices[t],
+					Vector3(x0, ha, z0), Vector3(x0 + CELL, hb, z0),
+					Vector3(x0, hc, z0 + CELL), Vector3(x0 + CELL, hd, z0 + CELL))
+			else:
+				for sj in SUB:
+					for si in SUB:
+						var x := x0 + si * half
+						var z := z0 + sj * half
+						var mid := Vector2(x + half * 0.5, z + half * 0.5)
+						var fine := _cell_surface(mid, height_at(mid.x, mid.y))
+						_surf[(j * SUB + sj) * _sw + i * SUB + si] = fine
+						var t := _tile_for(fine, mid, i * SUB + si, j * SUB + sj)
+						_quad(verts[t], normals[t], uvs[t], indices[t],
+							Vector3(x, height_at(x, z), z),
+							Vector3(x + half, height_at(x + half, z), z),
+							Vector3(x, height_at(x, z + half), z + half),
+							Vector3(x + half, height_at(x + half, z + half), z + half))
+			if minf(minf(ha, hb), minf(hc, hd)) < water_y \
+					and water_distance(Vector2(x0 + 0.5, z0 + 0.5)) < 2.0:
 				_quad(verts[water_slot], normals[water_slot], uvs[water_slot], indices[water_slot],
-					Vector3(a.x, water_y, a.z), Vector3(b.x, water_y, b.z),
-					Vector3(c.x, water_y, c.z), Vector3(d.x, water_y, d.z))
+					Vector3(x0, water_y, z0), Vector3(x0 + CELL, water_y, z0),
+					Vector3(x0, water_y, z0 + CELL), Vector3(x0 + CELL, water_y, z0 + CELL))
 
-	mats.append(Blocks.mat("t_water", Color(0.20, 0.47, 0.78, 0.78), 0.05, "spots",
-		Color(0.36, 0.62, 0.88), 1.0, false))
+	mats.append(Blocks.mat("t_water", Color(0.20, 0.47, 0.78, 0.78), 0.035, "water",
+		Color(0.42, 0.68, 0.92), 1.0, false))
 	var mesh := ArrayMesh.new()
 	for t in mats.size():
 		if verts[t].is_empty():

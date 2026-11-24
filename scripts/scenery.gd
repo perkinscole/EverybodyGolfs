@@ -18,6 +18,8 @@ func _ready() -> void:
 	_build_trees()
 	_build_plants()
 	_build_rocks()
+	_build_undergrowth()
+	_build_fence()
 	_build_bridge()
 	_build_hole_props()
 	_build_cart()
@@ -38,32 +40,81 @@ func _random_point() -> Vector2:
 
 # ---------------------------------------------------------------- trees
 
+const TREE_VOXEL := 0.5
+# Per kind: trunk height, canopy centre height and radius, in metres.
+const TREE_SHAPES := [
+	{"trunk_h": 3.5, "canopy_y": 4.9, "canopy_r": 1.9},     # oak
+	{"trunk_h": 4.5, "canopy_y": 5.9, "canopy_r": 1.5},     # birch
+	{"trunk_h": 2.5, "canopy_y": 4.6, "canopy_r": 1.8},     # pine
+]
+
+
+## Voxels for one tree. Slots: 0 bark, 1 leaf, 2 second leaf tone.
+func _tree_cells(kind: int) -> Dictionary:
+	var cells := {}
+	var sides := [Vector3i(1, 0, 0), Vector3i(-1, 0, 0), Vector3i(0, 0, 1), Vector3i(0, 0, -1)]
+	if kind == 2:
+		for y in 6:
+			cells[Vector3i(0, y, 0)] = 0
+		for y in range(4, 15):
+			var r := lerpf(3.9, 0.7, (y - 4) / 10.0) * (1.0 if y % 2 == 0 else 0.72)
+			var reach := int(ceil(r))
+			for dx in range(-reach, reach + 1):
+				for dz in range(-reach, reach + 1):
+					if dx * dx + dz * dz <= r * r - _rng.randf() * 1.2:
+						cells[Vector3i(dx, y, dz)] = 1 if _rng.randf() < 0.75 else 2
+		for y in range(6, 16):
+			cells[Vector3i(0, y, 0)] = 1          # keep the top joined up
+		return cells
+	var trunk := 7 if kind == 0 else 9
+	var radii := Vector3(3.8, 2.8, 3.8) if kind == 0 else Vector3(2.6, 3.3, 2.6)
+	var mid_y := trunk + (2 if kind == 0 else 2)
+	for y in trunk + 2:
+		cells[Vector3i(0, y, 0)] = 0
+	for side in sides:
+		if _rng.randf() < 0.55:
+			cells[side] = 0                       # root flare
+		if kind == 0 and _rng.randf() < 0.5:
+			cells[side + Vector3i(0, trunk - 1, 0)] = 0   # stub of a branch
+	for dx in range(-4, 5):
+		for dy in range(-4, 5):
+			for dz in range(-4, 5):
+				var q := Vector3(dx / radii.x, dy / radii.y, dz / radii.z).length_squared()
+				if q < 1.0 - _rng.randf() * 0.35:
+					var cell := Vector3i(dx, mid_y + dy, dz)
+					if not cells.has(cell):
+						cells[cell] = 1 if _rng.randf() < 0.72 else 2
+	return cells
+
+
 func _build_trees() -> void:
 	var bark := Blocks.mat("bark", Color(0.36, 0.25, 0.15), 0.04, "bark")
 	var birch_bark := Blocks.mat("birch_bark", Color(0.88, 0.87, 0.82), 0.03, "spots", Color(0.2, 0.2, 0.2))
-	var oak_leaf := Blocks.mat("oak_leaf", Color(0.17, 0.42, 0.14), 0.05, "spots", Color(0.11, 0.30, 0.10))
-	var birch_leaf := Blocks.mat("birch_leaf", Color(0.38, 0.58, 0.20), 0.05, "spots", Color(0.28, 0.46, 0.15))
-	var pine_leaf := Blocks.mat("pine_leaf", Color(0.09, 0.27, 0.17), 0.04, "spots", Color(0.06, 0.20, 0.13))
-	# Each kind: list of [box size, material, centre height], then canopy info.
-	var kinds := [
-		{"parts": [[Vector3(0.6, 3.8, 0.6), bark, 1.5], [Vector3(3.4, 2.4, 3.4), oak_leaf, 4.3],
-			[Vector3(2.0, 1.0, 2.0), oak_leaf, 6.0]], "canopy_y": 4.6, "canopy_r": 2.2},
-		{"parts": [[Vector3(0.45, 4.8, 0.45), birch_bark, 2.0], [Vector3(2.6, 2.6, 2.6), birch_leaf, 5.2],
-			[Vector3(1.4, 0.8, 1.4), birch_leaf, 6.9]], "canopy_y": 5.3, "canopy_r": 1.7},
-		{"parts": [[Vector3(0.5, 3.2, 0.5), bark, 1.2], [Vector3(3.6, 0.9, 3.6), pine_leaf, 2.9],
-			[Vector3(2.8, 0.9, 2.8), pine_leaf, 3.8], [Vector3(2.0, 0.9, 2.0), pine_leaf, 4.7],
-			[Vector3(1.1, 1.2, 1.1), pine_leaf, 5.75]], "canopy_y": 4.2, "canopy_r": 2.0},
+	var palettes := [
+		[bark, Blocks.mat("oak_leaf", Color(0.17, 0.42, 0.14), 0.05, "leaves", Color(0.10, 0.28, 0.09)),
+			Blocks.mat("oak_leaf_b", Color(0.21, 0.47, 0.16), 0.05, "leaves", Color(0.12, 0.31, 0.10))],
+		[birch_bark, Blocks.mat("birch_leaf", Color(0.38, 0.58, 0.20), 0.05, "leaves", Color(0.26, 0.44, 0.14)),
+			Blocks.mat("birch_leaf_b", Color(0.46, 0.64, 0.22), 0.05, "leaves", Color(0.30, 0.48, 0.15))],
+		[bark, Blocks.mat("pine_leaf", Color(0.09, 0.27, 0.17), 0.04, "leaves", Color(0.05, 0.18, 0.12)),
+			Blocks.mat("pine_leaf_b", Color(0.11, 0.31, 0.19), 0.04, "leaves", Color(0.06, 0.20, 0.13))],
 	]
-	var by_kind: Array = [[], [], []]
+	# A few different shapes of each kind, shared between many trees.
+	var variants := 3
+	var meshes: Array = []
+	var placed: Array = []
+	for kind in 3:
+		for v in variants:
+			meshes.append(Blocks.voxel_mesh(_tree_cells(kind), TREE_VOXEL, palettes[kind]))
+			placed.append([])
 
-	for attempt in 2600:
+	for attempt in 2300:
 		var p := _random_point()
 		var wooded: float = course.forest_at(p)
 		if wooded < 0.05 and _rng.randf() > 0.06:
 			continue
 		if course.dist_polyline(p, course.fairway) < course.fairway_half_width + 7.0:
 			continue
-		if course.dist_polyline(p, course.cart_path) < 4.0:
+		if course.dist_polyline(p, course.cart_path) < 4.5:
 			continue
 		if course.dist_polyline(p, PackedVector2Array([course.tee, course.fairway[0]])) < 13.0:
 			continue
@@ -79,41 +130,154 @@ func _build_trees() -> void:
 			kind = 2
 		elif roll > 0.6:
 			kind = 1
-		var s := _rng.randf_range(0.85, 1.45)
+		var s := _rng.randf_range(1.0, 1.5)
 		var ground: Vector3 = course.ground_point(p)
-		var info: Dictionary = kinds[kind]
-		var canopy_y: float = info["canopy_y"]
-		var canopy_r: float = info["canopy_r"]
-		by_kind[kind].append([ground, s, _rng.randi_range(0, 3)])
+		var shape_info: Dictionary = TREE_SHAPES[kind]
+		var trunk_h: float = shape_info["trunk_h"]
+		var canopy_y: float = shape_info["canopy_y"]
+		var canopy_r: float = shape_info["canopy_r"]
+		placed[kind * variants + _rng.randi_range(0, variants - 1)].append([ground, s, _rng.randi_range(0, 3)])
 		course.trees.append({
 			"pos": ground,
-			"trunk_r": 0.35 * s,
-			"trunk_h": 3.0 * s,
+			"trunk_r": 0.3 * s,
+			"trunk_h": trunk_h * s,
 			"canopy_c": ground + Vector3(0, canopy_y * s, 0),
 			"canopy_r": canopy_r * s,
 		})
 		var shape := BoxShape3D.new()
-		shape.size = Vector3(0.6 * s, 3.5 * s, 0.6 * s)
+		shape.size = Vector3(0.5 * s, trunk_h * s, 0.5 * s)
 		var cs := CollisionShape3D.new()
 		cs.shape = shape
-		cs.position = ground + Vector3(0, 1.5 * s, 0)
+		cs.position = ground + Vector3(0, trunk_h * s * 0.5, 0)
 		_body.add_child(cs)
 
-	for kind in kinds.size():
-		var list: Array = by_kind[kind]
-		for part in kinds[kind]["parts"]:
-			var mm := MultiMesh.new()
-			mm.transform_format = MultiMesh.TRANSFORM_3D
-			mm.mesh = Blocks.box_mesh(part[0], part[1])
-			mm.instance_count = list.size()
-			for i in list.size():
-				var s: float = list[i][1]
-				var origin: Vector3 = list[i][0]
-				var basis := Basis(Vector3.UP, list[i][2] * PI * 0.5).scaled(Vector3(s, s, s))
-				mm.set_instance_transform(i, Transform3D(basis, origin + Vector3(0, part[2] * s, 0)))
-			var mmi := MultiMeshInstance3D.new()
-			mmi.multimesh = mm
-			add_child(mmi)
+	for m in meshes.size():
+		_scatter(meshes[m], placed[m], -0.25, true)
+
+
+## One MultiMesh from a list of [ground point, scale, quarter turns].
+func _scatter(mesh: Mesh, list: Array, sink: float, shadows: bool) -> void:
+	if list.is_empty():
+		return
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = mesh
+	mm.instance_count = list.size()
+	for i in list.size():
+		var s: float = list[i][1]
+		var origin: Vector3 = list[i][0]
+		var basis := Basis(Vector3.UP, list[i][2] * PI * 0.5).scaled(Vector3(s, s, s))
+		mm.set_instance_transform(i, Transform3D(basis, origin + Vector3(0, sink * s, 0)))
+	var mmi := MultiMeshInstance3D.new()
+	mmi.multimesh = mm
+	if not shadows:
+		mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(mmi)
+
+
+## Bushes at the edge of the woods, mushrooms under the trees, reeds and lily
+## pads on the water.
+func _build_undergrowth() -> void:
+	var leaf := Blocks.mat("bush_leaf", Color(0.20, 0.45, 0.16), 0.05, "leaves", Color(0.12, 0.30, 0.10), 2.0)
+	var berry := Blocks.plain(Color(0.80, 0.16, 0.20))
+	var bush_meshes: Array = []
+	var bush_spots: Array = []
+	for v in 3:
+		var cells := {}
+		for dx in range(-3, 4):
+			for dy in range(0, 4):
+				for dz in range(-3, 4):
+					var q := Vector3(dx / 2.8, (dy - 1.0) / 2.4, dz / 2.8).length_squared()
+					if q < 1.0 - _rng.randf() * 0.45:
+						cells[Vector3i(dx, dy, dz)] = 1 if _rng.randf() < 0.025 else 0
+		bush_meshes.append(Blocks.voxel_mesh(cells, 0.25, [leaf, berry]))
+		bush_spots.append([])
+
+	var stalk := Blocks.plain(Color(0.92, 0.90, 0.82))
+	var caps := [Blocks.mat("cap_red", Color(0.80, 0.14, 0.14), 0.03, "spots", Color(0.95, 0.95, 0.92), 8.0),
+		Blocks.plain(Color(0.62, 0.42, 0.24))]
+	var shroom_meshes: Array = []
+	var shroom_spots: Array = []
+	for v in 2:
+		var cells := {Vector3i(0, 0, 0): 0, Vector3i(0, 1, 0): 0}
+		for dx in range(-1, 2):
+			for dz in range(-1, 2):
+				cells[Vector3i(dx, 2, dz)] = 1
+		cells[Vector3i(0, 3, 0)] = 1
+		shroom_meshes.append(Blocks.voxel_mesh(cells, 0.09, [stalk, caps[v]]))
+		shroom_spots.append([])
+
+	for attempt in 5000:
+		var p := _random_point()
+		if course.surface_at(p.x, p.y) != course.Surface.ROUGH or p.distance_to(course.clubhouse) < 10.0:
+			continue
+		if course.dist_polyline(p, course.cart_path) < 2.5:
+			continue
+		var wooded: float = course.forest_at(p)
+		var ground: Vector3 = course.ground_point(p)
+		if absf(wooded - 0.05) < 0.07 and _rng.randf() < 0.45:
+			bush_spots[_rng.randi_range(0, 2)].append([ground, _rng.randf_range(0.8, 1.5), _rng.randi_range(0, 3)])
+		elif wooded > 0.15 and _rng.randf() < 0.3:
+			shroom_spots[_rng.randi_range(0, 1)].append([ground, _rng.randf_range(0.8, 1.8), _rng.randi_range(0, 3)])
+	for v in bush_meshes.size():
+		_scatter(bush_meshes[v], bush_spots[v], 0.0, true)
+	for v in shroom_meshes.size():
+		_scatter(shroom_meshes[v], shroom_spots[v], 0.0, false)
+
+	# Reeds along the banks.
+	var reed := Blocks.cross_mesh(0.7, 1.6, Blocks.plant_material("reed", "grass", Color(0.36, 0.46, 0.18)))
+	var reed_spots: Array = []
+	for attempt in 900:
+		var k := _rng.randi_range(0, course.river.size() - 2)
+		var along: Vector2 = course.river[k].lerp(course.river[k + 1], _rng.randf())
+		var p := along + Vector2(_rng.randf_range(-7, 7), _rng.randf_range(-7, 7))
+		if attempt % 4 == 0:
+			p = course.pond_center + Vector2(_rng.randf_range(-16, 16), _rng.randf_range(-12, 12))
+		var wd: float = course.water_distance(p)
+		if wd < -0.6 or wd > 1.4 or course.surface_at(p.x, p.y) == course.Surface.PATH:
+			continue
+		if course.deck_at(p.x, p.y) > -1000.0:
+			continue
+		reed_spots.append([course.ground_point(p), _rng.randf_range(0.7, 1.2), _rng.randi_range(0, 3)])
+	_scatter(reed, reed_spots, 0.05, false)
+
+	# Lily pads on the pond.
+	var pad := Blocks.plain(Color(0.20, 0.50, 0.22))
+	var bloom := Blocks.plain(Color(0.96, 0.70, 0.82))
+	for i in 16:
+		var ang := _rng.randf() * TAU
+		var r := _rng.randf_range(0.15, 0.8)
+		var at := Vector3(course.pond_center.x + cos(ang) * course.pond_radii.x * r, course.water_y + 0.02,
+			course.pond_center.y + sin(ang) * course.pond_radii.y * r)
+		Blocks.box(self, Vector3(0.5, 0.03, 0.5), pad, at)
+		Blocks.box(self, Vector3(0.25, 0.03, 0.25), pad, at + Vector3(0.3, 0, 0.12))
+		if i % 3 == 0:
+			Blocks.box(self, Vector3(0.14, 0.12, 0.14), bloom, at + Vector3(0, 0.07, 0))
+
+
+## Post-and-rail fence beside the path from the clubhouse to the tee.
+func _build_fence() -> void:
+	var wood := Blocks.mat("dark_wood", Color(0.38, 0.26, 0.16), 0.04, "planks")
+	var line := PackedVector2Array([course.cart_path[0] + Vector2(0, -2), course.cart_path[1], course.cart_path[2]])
+	var posts: Array = []
+	for k in line.size() - 1:
+		var dir: Vector2 = (line[k + 1] - line[k]).normalized()
+		var side := Vector2(-dir.y, dir.x) * 2.3
+		var steps := int(line[k].distance_to(line[k + 1]) / 2.5)
+		for i in steps + 1:
+			posts.append(course.ground_point(line[k].lerp(line[k + 1], float(i) / steps) + side))
+	for i in posts.size():
+		var at: Vector3 = posts[i]
+		Blocks.box(self, Vector3(0.18, 1.1, 0.18), wood, at + Vector3(0, 0.5, 0))
+		if i == posts.size() - 1:
+			continue
+		var next: Vector3 = posts[i + 1]
+		if at.distance_to(next) > 4.0:
+			continue
+		for rail_y in [0.45, 0.85]:
+			var rail := Blocks.box(self, Vector3(0.08, 0.1, at.distance_to(next)), wood,
+				(at + next) * 0.5 + Vector3(0, rail_y, 0))
+			rail.look_at_from_position(rail.position, next + Vector3(0, rail_y, 0))
 
 
 # ---------------------------------------------------------------- plants
@@ -158,7 +322,7 @@ func _build_plants() -> void:
 
 
 func _build_rocks() -> void:
-	var stone := Blocks.mat("rock", Color(0.50, 0.50, 0.52), 0.06, "spots", Color(0.38, 0.38, 0.40), 2.0)
+	var stone := Blocks.mat("rock", Color(0.50, 0.50, 0.52), 0.06, "pebbles", Color(0.42, 0.42, 0.44), 1.5)
 	var spots: Array = []
 	for attempt in 260:
 		var p := _random_point()

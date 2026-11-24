@@ -7,6 +7,7 @@ const Blocks = preload("res://scripts/blocks.gd")
 var course: Node3D
 var player: Node3D
 var ball: Node3D
+var sound: Node
 ## Each: {node, kind, home, target, state, timer, speed, scare, radius,
 ## height, legs, phase, hop, hop_v, dir, cooldown, angle}
 var animals: Array = []
@@ -152,12 +153,24 @@ func _physics_process(delta: float) -> void:
 func _idle(a: Dictionary) -> void:
 	a["state"] = "idle"
 	a["timer"] = _rng.randf_range(2.0, 8.0)
+	if _rng.randf() < 0.12:
+		_call_out(a, -10.0)
+
+
+func _call_out(a: Dictionary, volume_db: float) -> void:
+	if sound == null:
+		return
+	var voices := {"sheep": "baa", "cow": "moo", "chicken": "cluck", "duck": "quack"}
+	var node: Node3D = a["node"]
+	sound.play_at(voices[a["kind"]], node.position + Vector3(0, 0.6, 0), volume_db, _rng.randf_range(0.85, 1.2))
 
 
 func _flee(a: Dictionary, away: Vector2) -> void:
 	if away.length() < 0.01:
 		away = Vector2(1, 0)
 	a["dir"] = away.normalized().rotated(_rng.randf_range(-0.5, 0.5))
+	if a["state"] != "flee" and _rng.randf() < 0.5:
+		_call_out(a, -6.0)
 	a["state"] = "flee"
 	a["timer"] = _rng.randf_range(1.2, 2.2)
 
@@ -182,6 +195,7 @@ func _ball_bump(a: Dictionary) -> void:
 	ball.airborne = true
 	a["cooldown"] = 1.0
 	a["hop_v"] = 5.5
+	_call_out(a, -2.0)
 	if a["kind"] != "duck":
 		_flee(a, Vector2(-offset.x, -offset.z))
 
@@ -203,6 +217,16 @@ func _build_sheep(a: Dictionary) -> void:
 	Blocks.box(node, Vector3(0.9, 0.75, 1.3), wool, Vector3(0, 0.88, 0))
 	Blocks.box(node, Vector3(0.42, 0.42, 0.45), face, Vector3(0, 1.05, -0.8))
 	Blocks.box(node, Vector3(0.50, 0.25, 0.30), wool, Vector3(0, 1.28, -0.72))
+	var eye := Blocks.plain(Color(0.95, 0.95, 0.95))
+	for ex in [-0.13, 0.13]:
+		Blocks.box(node, Vector3(0.07, 0.07, 0.02), eye, Vector3(ex, 1.12, -1.03))
+		Blocks.box(node, Vector3(0.16, 0.08, 0.10), face, Vector3(ex * 2.3, 1.20, -0.72))     # ears
+	Blocks.box(node, Vector3(0.14, 0.06, 0.02), Blocks.plain(Color(0.85, 0.60, 0.60)), Vector3(0, 0.93, -1.03))
+	Blocks.box(node, Vector3(0.22, 0.22, 0.14), wool, Vector3(0, 1.0, 0.70))                 # tail
+	# Tufts so the fleece is not one clean box.
+	for tuft in [Vector3(-0.3, 1.30, -0.3), Vector3(0.25, 1.30, 0.2), Vector3(-0.1, 1.30, 0.45),
+			Vector3(0.48, 0.95, -0.2), Vector3(-0.48, 0.90, 0.3)]:
+		Blocks.box(node, Vector3(0.3, 0.14, 0.3), wool, tuft)
 	_legs(a, Vector3(0.18, 0.55, 0.18), face, 0.28, -0.42, 0.42, 0.55)
 
 
@@ -218,6 +242,13 @@ func _build_cow(a: Dictionary) -> void:
 	for hx in [-0.35, 0.35]:
 		Blocks.box(node, Vector3(0.1, 0.22, 0.1), horn, Vector3(hx, 1.78, -1.05))
 	Blocks.box(node, Vector3(0.4, 0.2, 0.5), pink, Vector3(0, 0.62, 0.45))
+	var eye := Blocks.plain(Color(0.08, 0.08, 0.08))
+	for ex in [-0.2, 0.2]:
+		Blocks.box(node, Vector3(0.08, 0.08, 0.02), eye, Vector3(ex, 1.52, -1.41))
+		Blocks.box(node, Vector3(0.18, 0.10, 0.08), hide, Vector3(ex * 2.0, 1.60, -1.0))      # ears
+		Blocks.box(node, Vector3(0.05, 0.05, 0.02), eye, Vector3(ex * 0.5, 1.25, -1.56))      # nostrils
+	Blocks.box(node, Vector3(0.08, 0.6, 0.08), dark, Vector3(0, 1.25, 0.94))                 # tail
+	Blocks.box(node, Vector3(0.14, 0.14, 0.14), dark, Vector3(0, 0.92, 0.94))
 	_legs(a, Vector3(0.24, 0.72, 0.24), dark, 0.32, -0.62, 0.62, 0.72)
 
 
@@ -231,6 +262,10 @@ func _build_chicken(a: Dictionary) -> void:
 	Blocks.box(node, Vector3(0.12, 0.08, 0.14), yellow, Vector3(0, 0.66, -0.40))
 	Blocks.box(node, Vector3(0.06, 0.10, 0.16), red, Vector3(0, 0.86, -0.24))
 	Blocks.box(node, Vector3(0.20, 0.20, 0.10), white, Vector3(0, 0.55, 0.26))
+	Blocks.box(node, Vector3(0.06, 0.08, 0.06), red, Vector3(0, 0.56, -0.37))                # wattle
+	for ex in [-0.115, 0.115]:
+		Blocks.box(node, Vector3(0.02, 0.04, 0.04), Blocks.plain(Color(0.08, 0.08, 0.08)), Vector3(ex, 0.74, -0.28))
+		Blocks.box(node, Vector3(0.04, 0.22, 0.30), white, Vector3(ex * 1.6, 0.44, 0.02))     # wings
 	for lx in [-0.09, 0.09]:
 		var hip := Blocks.pivot(node, Vector3(lx, 0.26, 0))
 		Blocks.box(hip, Vector3(0.05, 0.26, 0.05), yellow, Vector3(0, -0.13, 0))

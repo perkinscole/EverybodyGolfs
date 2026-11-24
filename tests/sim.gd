@@ -5,6 +5,7 @@ extends SceneTree
 const Course = preload("res://scripts/course.gd")
 const Ball = preload("res://scripts/ball.gd")
 const Clubs = preload("res://scripts/clubs.gd")
+const Sound = preload("res://scripts/sound.gd")
 
 var course: Course
 var ball: Ball
@@ -80,6 +81,23 @@ func _initialize() -> void:
 	if not events.has("holed"):
 		print("FAIL: bot did not hole out")
 		failures += 1
+
+	print("-- audio")
+	var sound := Sound.new()
+	root.add_child(sound)
+	var waited := 0
+	while not sound.streams.has("music") and waited < 2000:
+		await process_frame
+		waited += 1
+	for key in sound.streams:
+		var stream: AudioStreamWAV = sound.streams[key]
+		var peak := 0
+		for i in range(0, stream.data.size(), 2):
+			peak = maxi(peak, absi(stream.data.decode_s16(i)))
+		if stream.data.size() < 200 or peak < 1500 or peak >= 32767:
+			print("FAIL: %s  bytes %d  peak %d" % [key, stream.data.size(), peak])
+			failures += 1
+	print("%d sounds, music loop %.1f s" % [sound.streams.size(), sound.streams["music"].get_length()])
 
 	print("OK" if failures == 0 else "FAILED")
 	quit(failures)

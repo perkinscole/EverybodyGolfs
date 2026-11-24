@@ -8,6 +8,8 @@ const Clubs = preload("res://scripts/clubs.gd")
 
 signal struck(power: float, drift: float)
 signal club_changed
+signal swing_started
+signal stepped
 
 enum Mode { FREE, ADDRESS }
 
@@ -132,6 +134,7 @@ func release_swing() -> void:
 		backswing = 0.0
 		return
 	_power = minf(backswing, 1.0)
+	swing_started.emit()
 	_down = true
 	_hit_sent = false
 
@@ -218,7 +221,10 @@ func _update_walk(delta: float) -> void:
 		p.y = ground + 0.1
 	global_position = p
 	var moved := Vector2(velocity.x, velocity.z).length()
+	var before := _walk_phase
 	_walk_phase = _walk_phase + moved * delta * 1.9 if moved > 0.2 else 0.0
+	if is_on_floor() and int(_walk_phase / PI) != int(before / PI):
+		stepped.emit()
 
 
 func _update_address(delta: float) -> void:
@@ -303,13 +309,26 @@ func _build_body() -> void:
 
 	_box(_body, Vector3(0.50, 0.62, 0.28), shirt, Vector3(0, 1.11, 0))
 	_box(_body, Vector3(0.30, 0.30, 0.30), skin, Vector3(0, 1.58, 0))
+	# Face, hair, collar, belt.
+	var dark := Color(0.12, 0.10, 0.10)
+	var hair := Color(0.35, 0.22, 0.12)
+	for ex in [-0.07, 0.07]:
+		_box(_body, Vector3(0.05, 0.05, 0.02), dark, Vector3(ex, 1.61, -0.155))
+	_box(_body, Vector3(0.10, 0.025, 0.02), Color(0.70, 0.40, 0.35), Vector3(0, 1.50, -0.155))
+	_box(_body, Vector3(0.32, 0.20, 0.10), hair, Vector3(0, 1.60, 0.12))
+	_box(_body, Vector3(0.52, 0.08, 0.30), white, Vector3(0, 1.39, 0))
+	_box(_body, Vector3(0.52, 0.07, 0.30), dark, Vector3(0, 0.82, 0))
+	_box(_body, Vector3(0.08, 0.07, 0.02), Color(0.85, 0.75, 0.30), Vector3(0, 0.82, -0.155))
 	_box(_body, Vector3(0.33, 0.10, 0.33), white, Vector3(0, 1.76, 0))
 	_box(_body, Vector3(0.30, 0.03, 0.16), white, Vector3(0, 1.72, -0.22))
 
 	_arm_l = _pivot(_body, Vector3(-0.32, 1.38, 0))
 	_box(_arm_l, Vector3(0.13, 0.60, 0.13), skin, Vector3(0, -0.30, 0))
+	_box(_arm_l, Vector3(0.15, 0.22, 0.15), shirt, Vector3(0, -0.10, 0))
+	_box(_arm_l, Vector3(0.14, 0.12, 0.14), white, Vector3(0, -0.55, 0))      # glove
 	_arm_r = _pivot(_body, Vector3(0.32, 1.38, 0))
 	_box(_arm_r, Vector3(0.13, 0.60, 0.13), skin, Vector3(0, -0.30, 0))
+	_box(_arm_r, Vector3(0.15, 0.22, 0.15), shirt, Vector3(0, -0.10, 0))
 
 	# Address arms + club: hang down and forward from the shoulders, and
 	# rotate around the forward axis to swing.

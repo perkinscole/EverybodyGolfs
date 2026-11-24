@@ -7,6 +7,10 @@ const Course = preload("res://scripts/course.gd")
 signal stopped
 signal holed
 signal hazard(kind: String)
+## The ball hit the ground (surface index) at this speed.
+signal bounced(surface: int, speed: float)
+## The ball hit a tree: "knock" for trunk, "rustle" for leaves.
+signal tree_hit(kind: String)
 
 const RADIUS := 0.06
 const G := 9.81
@@ -152,6 +156,7 @@ func _step(dt: float) -> void:
 			var n := _normal(p)
 			var vn := velocity.dot(n)
 			if vn < 0.0:
+				bounced.emit(s, -vn)
 				var bounce_v: float = -vn * BOUNCE[s]
 				velocity = (velocity - n * vn) * SKID[s] + n * bounce_v
 				if bounce_v < 0.8:
@@ -235,9 +240,11 @@ func _hit_trees(p: Vector3) -> void:
 			if vn < 0.0:
 				velocity -= n * vn * 1.5
 				velocity *= 0.6
+				tree_hit.emit("knock")
 		elif i != _last_tree:
 			var c: Vector3 = t["canopy_c"]
 			if p.distance_to(c) < canopy_r:
 				_last_tree = i
+				tree_hit.emit("rustle")
 				velocity *= 0.45
 				velocity += Vector3(randf_range(-3, 3), randf_range(-2, 0), randf_range(-3, 3))

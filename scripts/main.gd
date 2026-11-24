@@ -7,6 +7,7 @@ const Ball = preload("res://scripts/ball.gd")
 const Player = preload("res://scripts/player.gd")
 const Clubs = preload("res://scripts/clubs.gd")
 const Animals = preload("res://scripts/animals.gd")
+const Sound = preload("res://scripts/sound.gd")
 
 const SEARCH_LIMIT := 120.0
 const FIND_RADIUS := 3.0
@@ -16,11 +17,13 @@ E address the ball / step away
 At the ball: mouse aims, wheel or 1-8 picks a club
 Hold left mouse to take the club back, release to swing
 Keep the mouse still in the backswing or you will hook or slice it
-Right mouse cancels    Tab scorecard    Esc frees the mouse"""
+Right mouse cancels    Tab scorecard    M music    F11 fullscreen
+Esc frees the mouse"""
 
 var course: Course
 var ball: Ball
 var player: Player
+var sound: Sound
 var strokes := 0
 var hole_done := false
 ## Seconds spent looking for the ball, or -1 when not searching.
@@ -47,7 +50,11 @@ func _ready() -> void:
 	player.course = course
 	player.ball = ball
 	add_child(player)
+	sound = Sound.new()
+	sound.course = course
+	add_child(sound)
 	var animals := Animals.new()
+	animals.sound = sound
 	animals.name = "Animals"
 	animals.course = course
 	animals.player = player
@@ -60,6 +67,10 @@ func _ready() -> void:
 	ball.hazard.connect(_on_ball_hazard)
 	player.struck.connect(_on_struck)
 	player.club_changed.connect(_refresh_club_label)
+	player.swing_started.connect(func(): sound.play("swish", -6.0, randf_range(0.9, 1.1)))
+	player.stepped.connect(_on_step)
+	ball.bounced.connect(_on_ball_bounced)
+	ball.tree_hit.connect(func(kind: String): sound.play_at(kind, ball.position, 0.0, randf_range(0.9, 1.1)))
 	_start_hole()
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	say("Follow the path to the first tee.  H for controls", 6.0)
@@ -97,6 +108,11 @@ func _unhandled_input(event: InputEvent) -> void:
 			interact()
 		KEY_H:
 			_help.visible = not _help.visible
+		KEY_M:
+			say("Music on" if sound.toggle_music() else "Music off", 2.0)
+		KEY_F11:
+			var full := DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN
+			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED if full else DisplayServer.WINDOW_MODE_FULLSCREEN)
 		KEY_R:
 			if hole_done:
 				_start_hole()
@@ -152,6 +168,15 @@ func _on_struck(power: float, drift: float) -> void:
 	if putting:
 		curve = 0.0
 		yaw = player.aim_yaw + deg_to_rad(randfn(0.0, scatter)) - drift * deg_to_rad(3.0)
+	if putting:
+		sound.play_at("putt", ball.position, -4.0 + power * 6.0)
+	else:
+		sound.play_at("drive" if player.club_index <= 1 else "iron", ball.position, -5.0 + power * 6.0,
+			randf_range(0.95, 1.05))
+		if lie == Course.Surface.BUNKER:
+			sound.play_at("sand", ball.position, 0.0)
+		elif lie == Course.Surface.ROUGH:
+			sound.play_at("rustle", ball.position, -6.0, 1.3)
 	_last_shot = Vector2(ball.position.x, ball.position.z)
 	strokes += 1
 	search_time = -1.0
@@ -163,7 +188,26 @@ func _on_ball_stopped() -> void:
 	search_time = 0.0
 
 
+func _on_ball_bounced(surface: int, speed: float) -> void:
+	var key := "thud"
+	if surface == Course.Surface.BUNKER:
+		key = "sand"
+	elif surface == Course.Surface.PATH:
+		key = "clack"
+	sound.play_at(key, ball.position, clampf(-14.0 + speed * 1.2, -14.0, 3.0), randf_range(0.9, 1.1))
+
+
+func _on_step() -> void:
+	var p := player.global_position
+	var hard := course.surface_at(p.x, p.z) == Course.Surface.PATH \
+		or p.y < course.deck_at(p.x, p.z) + 0.5 \
+		or Vector2(p.x, p.z).distance_to(course.clubhouse) < 7.0
+	sound.play("step_hard" if hard else "step_grass", -16.0, randf_range(0.85, 1.15))
+
+
 func _on_ball_holed() -> void:
+	sound.play_at("cup", ball.position, 2.0)
+	sound.play("fanfare", -8.0)
 	hole_done = true
 	search_time = -1.0
 	say("%s\n%d %s on a par %d.   R to head back to the clubhouse" % [
@@ -172,6 +216,9 @@ func _on_ball_holed() -> void:
 
 
 func _on_ball_hazard(kind: String) -> void:
+	if kind == "water":
+		sound.play_at("splash", ball.position, 4.0)
+	sound.play("penalty", -10.0)
 	strokes += 1
 	ball.place(_last_shot)
 	ball.set_beacon(true)
@@ -180,6 +227,7 @@ func _on_ball_hazard(kind: String) -> void:
 
 
 func _lose_ball() -> void:
+	sound.play("penalty", -10.0)
 	strokes += 1
 	search_time = -1.0
 	ball.place(course.nearest_fairway_point(Vector2(ball.position.x, ball.position.z)))
@@ -246,7 +294,7 @@ func _build_hud() -> void:
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.add_child(root)
-	_prompt = _label(root, Control.PRESET_CENTER_BOTTOM, HORIZONTAL_ALIGNMENT_CENTER, Vector2(0, -40))
+	_prompt = _label(root, Control.PRESET_CENTER_BOTTOM, HORIZONTAL_ALIGNMENT_CENTER, Vector2(0, -54))
 	_club = _label(root, Control.PRESET_BOTTOM_LEFT, HORIZONTAL_ALIGNMENT_LEFT, Vector2(12, -12))
 	_timer = _label(root, Control.PRESET_TOP_RIGHT, HORIZONTAL_ALIGNMENT_RIGHT, Vector2(-12, 10))
 	_message = _label(root, Control.PRESET_CENTER_TOP, HORIZONTAL_ALIGNMENT_CENTER, Vector2(0, 50))
@@ -259,8 +307,8 @@ func _build_hud() -> void:
 func _label(parent: Control, preset: int, align: int, offset: Vector2) -> Label:
 	var l := Label.new()
 	var settings := LabelSettings.new()
-	settings.font_size = 12
-	settings.outline_size = 4
+	settings.font_size = 16
+	settings.outline_size = 5
 	settings.outline_color = Color(0, 0, 0, 0.85)
 	l.label_settings = settings
 	l.horizontal_alignment = align
